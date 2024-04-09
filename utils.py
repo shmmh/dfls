@@ -2,19 +2,17 @@
 
 import numpy as np
 import pandas as pd
-import os
-import matplotlib.pyplot as plt
 from matplotlib.widgets import RangeSlider, Button
+import matplotlib.pyplot as plt
 import numpy as np
-from bokeh.plotting import figure, output_notebook
+
+
+from bokeh.plotting import figure, output_notebook, show
 from bokeh.palettes import Dark2
-from bokeh.layouts import layout, column
+from bokeh.layouts import column
+
 from bokeh.models import RangeSlider, Button, CustomJS, Spacer, HoverTool, ColumnDataSource, Slider, Legend, Range1d
 output_notebook()
-
-os.environ['JUPYTER_BOKEH_EXTERNAL_URL'] = "https://labs.shmmh.co"
-os.environ['JUPYTERHUB_SERVICE_PREFIX'] = "https://labs.shmmh.co"
-
 
 
 
@@ -60,31 +58,36 @@ def parse_data(file_path):
             channels[channel_name] = {'x': time_values, 'y': voltage_values, 'Trace Info': trace_info}
     return channels
 
-def plot_data(x, y, peak):
-
-    show_peaks, peaks = peak
+def plot_data(x, y, peaks=[],xlabel='s', ylabel='V'):
+    from matplotlib.widgets import RangeSlider, Button
+    
+    peaks = np.array(peaks)
     
     fig, ax = plt.subplots(figsize=(15, 6))
     plt.subplots_adjust(bottom=0.1, left=0.12)
+    
     xmin, xmax = x.min(), x.max()
     ymin, ymax = y.min(), y.max()
 
     x_ax = plt.axes([0.15, 0.02, 0.7, 0.04])
-    x_limits = RangeSlider(x_ax, label='x lim:',valmin=xmin, valmax=xmax, valinit=(xmin,xmax), valstep=abs(xmax-xmin)/100, orientation='horizontal')
+    x_limits = RangeSlider(ax=x_ax, label='x lim:',valmin=xmin, valmax=xmax, valinit=(xmin,xmax), valstep=abs(xmax-xmin)/100, orientation='horizontal')
 
     y_ax = plt.axes([0.05, 0.2, 0.02, 0.7])
-    y_limits = RangeSlider(y_ax,label='y lim',valmin=ymin, valmax=ymax, valinit=(ymin,ymax), valstep=abs(ymax-ymin)/100, orientation='vertical')
+    y_limits = RangeSlider(ax=y_ax,label='y lim',valmin=ymin, valmax=ymax, valinit=(ymin,ymax), valstep=abs(ymax-ymin)/100, orientation='vertical')
 
-    reset_ax = plt.axes([0.8, 0.9, 0.1, 0.04])
+    reset_ax = plt.axes([0.15, 0.9, 0.1, 0.04])
     reset_button = Button(reset_ax, 'Reset')
 
-    if show_peaks:
+    if peaks.size > 0:
         ax.plot(x[peaks], y[peaks], 'xr')
         for i, peak in enumerate(peaks):
             ax.annotate( f'{i}', xy=(x[peak], y[peak]), xytext=(0, 5), textcoords='offset points', ha='center')
         
 
-    line = ax.plot(x,y)
+    ax.plot(x,y)
+    
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
 
     def reset(val):
         x_limits.reset()
@@ -109,68 +112,70 @@ def plot_data(x, y, peak):
     reset_button.on_clicked(reset)
 
     plt.show()
-    return x,y, peaks
+
 
 def plot_data_bokeh(data):
-    def bkapp(doc):
-        tools = 'pan, box_zoom,zoom_in, zoom_out, wheel_zoom ,undo, redo, reset, save'
-        p = figure( title="Oscilloscope Data", x_axis_label='Time/s', y_axis_label='Volts/mV', sizing_mode='scale_width', max_height=800, resizable=True, toolbar_location='left', tools = tools)
-        xmins, ymins = [], []
-        for i,channel in enumerate(data):
-            ch = data[channel]
+    
+    tools = 'pan, box_zoom,zoom_in, zoom_out, wheel_zoom ,undo, redo, reset, save'
+    p = figure( title="Oscilloscope Data", x_axis_label='Time/s', y_axis_label='Volts/mV', sizing_mode='scale_width', max_height=800, resizable=True, toolbar_location='left', tools = tools)
+    xmins, ymins = [], []
+    for i,channel in enumerate(data):
+        ch = data[channel]
+    
+        x, y = ch['x'], ch['y']
+        xmin, xmax = x.min(), x.max()
+        ymin, ymax = y.min(), y.max()
+        xmins.extend([xmin,xmax])
+        ymins.extend([ymin,ymax])
         
-            x, y = ch['x'], ch['y']
-            xmin, xmax = x.min(), x.max()
-            ymin, ymax = y.min(), y.max()
-            xmins.extend([xmin,xmax])
-            ymins.extend([ymin,ymax])
-            
-            p.line(x, y, line_width=2, legend_label=f'{channel}', color=Dark2[8][i])
-        
-        xmin, xmax = min(xmins), max(xmins)
-        ymin, ymax = min(ymins), max(ymins)
-        p.x_range = Range1d(xmin,xmax)
-        p.y_range = Range1d(ymin,ymax)
-        
-        hover = HoverTool(tooltips=[('x', '@x'), ('y', '@y'),('index', '$index')])
-        p.add_tools(hover)
-        
-        x_range_slider = RangeSlider( 
-            title="X", 
-            start=xmin, 
-            end=xmax, 
-            step= (xmax-xmin)/ 1000, 
-            value=(p.x_range.start, p.x_range.end),
-            sizing_mode='scale_width',
-            max_width=500
-        ) 
-        y_range_slider = RangeSlider( 
-            title="Y", 
-            start=ymin, 
-            end=ymax, 
-            step= (ymax-ymin)/ 10000, 
-            value=(p.y_range.start, p.y_range.end),
-            sizing_mode='scale_width',
-            max_width=500
-        ) 
-        
-        x_range_slider.js_link("value", p.x_range, "start", attr_selector=0) 
-        x_range_slider.js_link("value", p.x_range, "end", attr_selector=1) 
-        y_range_slider.js_link("value", p.y_range, "start", attr_selector=0) 
-        y_range_slider.js_link("value", p.y_range, "end", attr_selector=1)
-        
-        reset_slider_callback = CustomJS(args=dict(x_range_slider=x_range_slider, y_range_slider=y_range_slider), code="""
-            x_range_slider.value = [x_range_slider.start, x_range_slider.end];
-            y_range_slider.value = [y_range_slider.start, y_range_slider.end];
-        """)
-        reset_button = Button(label="Reset")
-        
-        reset_button.on_click(reset_slider_callback)
-        
-        layout = column(reset_button, x_range_slider,Spacer(height=30),y_range_slider,Spacer(height=30),p,sizing_mode='scale_width', max_height=900)
-        
-        p.legend.click_policy="hide"
-    return bkapp
+        p.line(x, y, line_width=2, legend_label=f'{channel}', color=Dark2[8][i])
+    
+    xmin, xmax = min(xmins), max(xmins)
+    ymin, ymax = min(ymins), max(ymins)
+    p.x_range = Range1d(xmin,xmax)
+    p.y_range = Range1d(ymin,ymax)
+    
+    hover = HoverTool(tooltips=[('x', '@x'), ('y', '@y'),('index', '$index')])
+    p.add_tools(hover)
+    
+    x_range_slider = RangeSlider( 
+        title="X", 
+        start=xmin, 
+        end=xmax, 
+        step= (xmax-xmin)/ 1000, 
+        value=(p.x_range.start, p.x_range.end),
+        sizing_mode='scale_width',
+        max_width=500
+    ) 
+    y_range_slider = RangeSlider( 
+        title="Y", 
+        start=ymin, 
+        end=ymax, 
+        step= (ymax-ymin)/ 10000, 
+        value=(p.y_range.start, p.y_range.end),
+        sizing_mode='scale_width',
+        max_width=500
+    ) 
+    
+    x_range_slider.js_link("value", p.x_range, "start", attr_selector=0) 
+    x_range_slider.js_link("value", p.x_range, "end", attr_selector=1) 
+    y_range_slider.js_link("value", p.y_range, "start", attr_selector=0) 
+    y_range_slider.js_link("value", p.y_range, "end", attr_selector=1)
+    
+    reset_slider_callback = CustomJS(args=dict(x_range_slider=x_range_slider, y_range_slider=y_range_slider), code="""
+        x_range_slider.value = [x_range_slider.start, x_range_slider.end];
+        y_range_slider.value = [y_range_slider.start, y_range_slider.end];
+    """)
+    reset_button = Button(label="Reset")
+    
+    reset_button.js_on_click(reset_slider_callback)
+    
+    layout = column(reset_button, x_range_slider,Spacer(height=30),y_range_slider,Spacer(height=30),p,sizing_mode='scale_width', max_height=900)
+    
+    p.legend.click_policy="hide"
+    show(layout)
+    
+    return layout
 
 
 from scipy import constants as cnst
@@ -187,10 +192,9 @@ def find_calibration(channel, path_diff,peaks, peak_ind=(0,1)):
     
     hor_div = ((fringes / time_diff) * (df)) # in MHz/ms
     
-    print('P214 - P95 =', time_diff, 'ms')
-    print('hor_div =', hor_div, ' Mhz/ms')
-    print('Freq per 200 us ( 1 unit ) =', hor_div * 200 / 1000, ' MHz' )
-    print('df =',df, 'MHz' )
-    print('firnges = ', fringes)
+    print(f'P{ind2} - P{ind1} =', time_diff, 'ms')
+    print('freq per fringe = ',df, 'MHz' )
+    print('fringes = ', fringes)
+    print('hor_div = ', hor_div, ' Mhz/ms')
 
     return hor_div, time_diff # MHz/ms and ms

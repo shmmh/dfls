@@ -59,3 +59,13 @@ data = parse_data('relative_path_to_file')
 }
 
 ```
+
+
+## Plotting the Data
+
+Use `plot_data_bokeh` to plot the data and interact with it.
+
+
+## Finding Horizontal Calibration
+
+Use `find_calibration` to calculate the calibration of the time axis of the oscilloscope in `MHz/ms`
