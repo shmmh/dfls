@@ -39,9 +39,21 @@ def parse_data(file_path):
             
             # Extract other trace information
             trace_info = {key: value for key, value in zip(channel_data.iloc[6:, 0], channel_data.iloc[6:, 1])}
+
+            
+            # Remove the empty 'NaN' key-value pair
+            del trace_info[np.nan]
+            
+            # Split the Note info into data,time, oscilliscope model
+            note_info = trace_info['Note'].split()
+            trace_info['Date'] = note_info[3]
+            trace_info['Time'] = note_info[2]
+            trace_info['Model'] = note_info[0]
+            
             trace_info['Record Length'] = record_length
             trace_info['Sample Interval'] = sample_interval
             trace_info['Trigger Point'] = trigger_point
+            del trace_info['Note']
             
             channel_name  = trace_info['Source']
             # Store data in the channels dictionary
